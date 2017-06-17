@@ -1,0 +1,126 @@
+# -*- coding: utf-8 -*-
+import numpy as np
+import pandas as pd
+import jieba
+import os
+
+os.getcwd()
+X_train = pd.read_csv('Desktop/datasets/train.csv', encoding = 'utf-8' , sep = '\t')
+X_train.shape
+X_train.columns = ['label' , 'id' , 'news_title' , 'news_content']
+X_val = pd.read_csv('Desktop/datasets/validate.csv', encoding = 'utf-8' , sep = '\t')
+X_val.shape
+X_val.columns = ['label' , 'id' , 'news_title' , 'news_content']
+X_test = pd.read_csv('Desktop/datasets/test.csv' ,encoding = 'utf-8' , sep = '\t')
+X_test.shape
+X_test.columns = ['label' , 'id' , 'news_title' , 'news_content']
+
+##合并训练集和验证集
+
+X_all = pd.concat((X_train ,X_val , X_test) , axis = 0 , ignore_index=True)
+X_all = X_all.dropna()
+X_all.shape
+
+##提取分类标签
+Y_all = X_all['label'].values
+Y_all
+labels = []
+for i in Y_all:
+    if i== u'体育':
+        labels.append(1)
+    else:
+        labels.append(0)
+len(labels)
+labels = np.array(labels,dtype = 'int64')
+print(np.bincount(labels))
+
+##去掉特殊符号和数字
+import re
+temp = "想做/ 兼_职/学生_/ 的 、加,我Q：  1 5.  8 0. ！！？？  8 6 。0.  2。 3     有,惊,喜,哦"
+temp = temp.decode("utf8")
+string = re.sub("[\s+\.\!\/_,$%^*(+\"\']+|[+——！，。？、~@#￥%……&*（）]+|[\d+]|[\w+]".decode("utf8"), "".decode("utf8"),temp)
+print(string)
+x_list = []
+for i in X_all_list:
+    string = re.sub(ur"[\s+\.\!\/_,$%^*(+\"\']+|[+——！，。？、~@#￥%……&*（）]+|[\d+]|[\w+]|[“”]", ur"" , i ).strip()
+    x_list.append(string)
+
+
+##中文分词
+print('开始分词')
+X = []
+for i in x_list:
+    seg_list = jieba.cut(i)
+    j = ' '.join(seg_list)
+    X.append(j)
+print('分词结束')
+for x in X[:1]:
+    for i in x[:10]:
+        print(i)
+ ## 载入停用词       
+with open('C:/Users/Administrator/Desktop/datasets/stopwords.txt' , 'rb') as f:
+    stop_words = f.read().splitlines()
+for i in stop_words[:10]:
+    print(i)
+    
+## 划分training-data 、validation-data、testing-data
+X_train = X[:64487]
+print(len(X_train))
+y_train = labels[:64487]
+print(y_train.shape)
+
+X_val = X[64487:73684]
+print(len(X_val))
+y_val = labels[64487:73684]
+print(len(y_val))
+
+X_test = X[73684:]
+print(len(X_test))
+y_test = labels[73684:]
+print(len(y_test))
+
+y_train = list(y_train)
+y_val = list(y_val)
+X_train_val = X_train + X_val
+y_train_val = y_train + y_val
+y_train_val = np.array(y_train_val , dtype = 'int64')
+print(len(X_train_val))
+print(len(y_train_val))
+
+##文本特征提取
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+feature_extraction = TfidfVectorizer(min_df = 5 ,token_pattern = u"(?u)\\b\\w+\\b" , stop_words=stop_words , ngram_range=(1,1))
+X_train_val = feature_extraction.fit_transform(X_train_val)
+print(X_train_val.shape)
+
+X_test = feature_extraction.transform(X_test)
+print(X_test.shape)
+print(type(X_train_val))
+
+##训练模型LR
+from sklearn.linear_model import LogisticRegression
+lr = LogisticRegression()
+from sklearn.grid_search import GridSearchCV
+parameters = {'penalty':('l1' , 'l2') , 'C':[0.5,20.0]}
+clf = GridSearchCV(lr , parameters)
+print('开始训练模型')
+clf.fit(X_train_val , y_train_val)
+print('模型训练结束')
+clf
+
+lr_accuracy_train_val = clf.score(X_train_val , y_train_val)
+lr_accuracy_test = clf.score(X_test , y_test)
+print(lr_accuracy_train_val)
+print(lr_accuracy_test)
+
+lr_test_pred = clf.predict(X_test)
+print(np.bincount(lr_test_pred))
+##准确率和召回率验证
+from sklearn.metrics import classification_report
+Lsvc_report = classification_report(y_test,lr_test_pred )
+print(Lsvc_report)
+##AUC验证
+prediction_proba_test = clf.predict_proba(X_test)
+prediction_proba_test
+from sklearn.metrics import roc_auc_score
+print('ROC-AUC yield ' + str(roc_auc_score(y_test , prediction_proba_test[: , 1])))
